@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # Creator: Thiemo Schuff
-# Source: https://github.com/Starwhooper/RPi-household-energy-status
+# Source: https://github.com/Starwhooper/RPi-hh-em-mqtt
 
 #######################################################
 #
@@ -39,14 +39,12 @@ except:
 logging.getLogger("urllib3")
 logging.basicConfig(
  filename='/var/log/hh-em.log', 
-# level=logging.DEBUG, encoding='utf-8', 
- level=logging.WARNING, encoding='utf-8', 
+ level=logging.DEBUG, encoding='utf-8', 
+# level=logging.WARNING, encoding='utf-8', 
  format='%(asctime)s:%(levelname)s:%(message)s'
 )
 
 #set const
-#globals()['pages'] = ['detail','pretty','blank']
-#globals()['scriptroot'] = os.path.split(os.path.abspath(__file__))[0]
 globals()['scriptroot'] = os.path.dirname(__file__)
 
 ##### import config.json
@@ -113,11 +111,6 @@ def prepare():
   font = ImageFont.load_default()
  globals()['font'] = font
 
- ##device urls 
- #globals()['electricitymeterurl'] = str(electricitymeterurl())
- globals()['inverterurl'] = str(inverterurl())
- 
-# global device
  
 def doublecheck():
  runninginstances = 0
@@ -136,7 +129,7 @@ def doublecheck():
 def imagepath(page = ''):
  import tempfile
  folder = tempfile.gettempdir()
- filename = '/householdenergy'
+ filename = '/RPi-hh-em-mqtt'
  fileext = '.gif'
 
  if page == '': path = str(folder) + '/' + str(filename) + str(fileext)
@@ -173,8 +166,8 @@ def pomessage(msg = '', prio = 0, attachment = False):
       "user": cf["pushover"]["userkey"],
       "html": 1,
       "priority": prio,
-      "message": "Status of househould energy:" + msg ,
-      "title": "Househould energy",
+      "message": "Status of hh-em:" + msg ,
+      "title": "hh-em",
      }
      ,
      files = {
@@ -188,8 +181,8 @@ def pomessage(msg = '', prio = 0, attachment = False):
       "user": cf["pushover"]["userkey"],
       "html": 1,
       "priority": prio,
-      "message": "Status of househould energy:" + msg ,
-      "title": "Househould energy",
+      "message": "Status of hh-em:" + msg ,
+      "title": "hh-em",
      }
     )
   else: logging.debug('no messagetext found')
@@ -230,6 +223,7 @@ def on_mqtt_message(client, userdata, msg):
 
 #####read inverter
 def readinverter():
+ #inverterurl = str(inverterurl()) 
  total = -1
  now = 0
  inverterread = False
@@ -240,7 +234,7 @@ def readinverter():
  
  try:
   for i in range(5):
-   inverter = requests.get(inverterurl, timeout=1)
+   inverter = requests.get(inverterurl(), timeout=1)
    if inverter.status_code == 200: 
     inverterread = True
     break
@@ -248,20 +242,20 @@ def readinverter():
  except:
   inverterofflinecount += 1
   if inverterofflinecount >= 100:
-   logging.warning('could not open/read from inverter ' + inverterurl + ' ' + str(inverterofflinecount) + ' times')
+   logging.warning('could not open/read from inverter ' + inverterurl() + ' ' + str(inverterofflinecount) + ' times')
    inverterofflinecount = 0
  
 
  if inverterread == True:
   if inverterofflinecount >= 1: 
-   logging.warning('could not open/read from inverter ' + inverterurl + ' ' + str(inverterofflinecount) + ' times, but now its back')
+   logging.warning('could not open/read from inverter ' + inverterurl() + ' ' + str(inverterofflinecount) + ' times, but now its back')
    inverterofflinecount = 0
   try:
    total = float(re.search(r'var\s+webdata_total_e\s*=\s*"([^"]+)"', inverter.text).group(1))
    now = int(re.search(r'var\s+webdata_now_p\s*=\s*"([^"]+)"', inverter.text).group(1))
-   logging.debug('could read values from inverter ' + inverterurl)
+   logging.debug('could read values from inverter ' + inverterurl())
   except:
-   logging.warning('could not read values from inverter ' + inverterurl)
+   logging.warning('could not find searched values from inverter frontend' + inverterurl())
 
  return(total,now)
     
@@ -315,19 +309,29 @@ def calculate():
   pomessage(msg='electricitymeter now: ' + str(electricitymeter_now),prio=0,attachment=True)
   lastnegativepowerusagemessage = datetime.now()
 
- global electricitymeter_agg_per_day
- electricitymeter_agg_per_day = round(electricitymeter_total_in / (( datetime.utcnow().timestamp() - cf['electricitymeter']['since']) / 60 / 60 / 24),1)
+ try:
+  global electricitymeter_agg_per_day
+  electricitymeter_agg_per_day = round(electricitymeter_total_in / (( datetime.utcnow().timestamp() - cf['electricitymeter']['since']) / 60 / 60 / 24),1)
+ except:
+  logging.warning('could not calculate electricitymeter_agg_per_day')
 
- global powersource
- if electricitymeter_now <= 0: powersource = 'sun'
- else: powersource = 'net'
+ try:
+  global powersource
+  if electricitymeter_now <= 0: powersource = 'sun'
+  else: powersource = 'net'
+ except:
+  logging.warning('could not define powersource')
+
 
 #calculate others 
  global consumption
  consumption = electricitymeter_now + inverter_now
  global selfusedsunenergy
  try: selfusedsunenergy = inverter_adj - electricitymeter_total_out
- except: selfusedsunenergy = 0
+ except: 
+  selfusedsunenergy = 0
+  logging.warning('could not calculate selfusedsunenergy')
+
  
  #########compare current consumption and current provided over inverter to know how much of current consumption cames from sun
  global rateconsumptionfromsun
@@ -335,6 +339,8 @@ def calculate():
   rateconsumptionfromsun = int(100 / consumption * inverter_now)
  except:
   rateconsumptionfromsun = 0
+  logging.warning('could not calculate rateconsumptionfromsun')
+
  
  #########compare current provided over inverter and current consumption to know how much of current solar power are used from my household
  global ratesolarpowerforhousehold
@@ -343,6 +349,8 @@ def calculate():
   if ratesolarpowerforhousehold > 100: ratesolarpowerforhousehold = 100
  except:
   ratesolarpowerforhousehold = 0
+  logging.warning('could not calculate ratesolarpowerforhousehold')
+
 
  #########compare complete provided from interver exclude the adjustemt with the complete provided over electricitymeter out to net to know how much of collected sun energy i use myself
  global rateinverteradjvselectricimetertotalout
@@ -350,6 +358,7 @@ def calculate():
   rateinverteradjvselectricimetertotalout = int(100 / inverter_adj * (selfusedsunenergy))
  except:
   rateinverteradjvselectricimetertotalout = 0
+  logging.warning('could not calculate rateinverteradjvselectricimetertotalout')
  lastcalculate = datetime.now()
 
 #######################################################
@@ -540,6 +549,26 @@ def saveimage():
    logging.info('current image is from now')
   
 
+def on_disconnect(client, userdata, rc):
+    logging.info("Disconnected with result code: %s", rc)
+    reconnect_count, reconnect_delay = 0, FIRST_RECONNECT_DELAY
+    while reconnect_count < MAX_RECONNECT_COUNT:
+        logging.info("Reconnecting in %d seconds...", reconnect_delay)
+        time.sleep(reconnect_delay)
+
+        try:
+            client.reconnect()
+            logging.info("Reconnected successfully!")
+            return
+        except Exception as err:
+            logging.error("%s. Reconnect failed. Retrying...", err)
+
+        reconnect_delay *= RECONNECT_RATE
+        reconnect_delay = min(reconnect_delay, MAX_RECONNECT_DELAY)
+        reconnect_count += 1
+    logging.info("Reconnect failed after %s attempts. Exiting...", reconnect_count)
+
+
 #######################################################
 #
 # start
@@ -547,23 +576,42 @@ def saveimage():
 #######################################################
  
 def main():
+ logging.debug('start main')
 # doublecheck() #ensure that only one instance is running at the same time
  prepare()
  device = get_device()
 
-# confire mqtt source
- client = paho.Client(client_id="", userdata=None, protocol=paho.MQTTv5)
- client.tls_set(tls_version=mqtt.client.ssl.PROTOCOL_TLS)
- client.username_pw_set(cf['mqtt']['broker']['user'], cf['mqtt']['broker']['pw'])
- client.connect(cf['mqtt']['broker']['url'], cf['mqtt']['broker']['port']) #mqtt broker
+ try:
+  client = paho.Client(client_id='', userdata=None, protocol=paho.MQTTv5)
 
- client.subscribe(cf['mqtt']['em']['subscribe']) #electricitymeter
- for i in cf['mqtt']['plug']:
-  #print(cf['mqtt']['plug'][i]['subscribe'])
-  client.subscribe(cf['mqtt']['plug'][i]['subscribe']) #plug
- client.on_message = on_mqtt_message
+  client.tls_set(tls_version=mqtt.client.ssl.PROTOCOL_TLS)
+  client.username_pw_set(cf['mqtt']['broker']['user'], cf['mqtt']['broker']['pw'])
+  logging.debug('configure mqtt source')
+ except:
+  logging.critical('could not configure mqtt source')
+  
+ online = False
+ while online == False:
+  try:
+   client.connect(cf['mqtt']['broker']['url'], cf['mqtt']['broker']['port']) #mqtt broker
+   logging.debug('connect mqtt broker ')
+   online = True
+  except:
+   logging.critical('could not connect mqtt broker ')
+   time.sleep(1)
+   
+  
+ try: 
+  client.subscribe(cf['mqtt']['em']['subscribe']) #electricitymeter
+  for i in cf['mqtt']['plug']:
+   client.subscribe(cf['mqtt']['plug'][i]['subscribe']) #plug
+  client.on_message = on_mqtt_message
+ except:
+  logging.critical('could not start to subscribe from  mqtt')
 
+  
  client.loop_start()
+ 
  while True:
   try:
    calculate()
@@ -581,7 +629,7 @@ def main():
    saveimage()
   except:
    logging.critical('issue with saveimage')
-  
+
   time.sleep(0.1)
  client.loop_stop()
 if __name__ == '__main__':
