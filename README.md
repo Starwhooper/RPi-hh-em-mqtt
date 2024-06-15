@@ -28,14 +28,14 @@ sudo wget https://raw.githubusercontent.com/Starwhooper/luma.examples/patch-1/co
 
 ### install this tool itself:
 ```bash
-sudo git clone https://github.com/Starwhooper/RPi-household-energy-status /opt/RPi-household-energy-status
-sudo chmod +x /opt/RPi-household-energy-status/comparedisplay.py
+sudo git clone https://github.com/Starwhooper/RPi-hh-em-mqtt /opt/RPi-hh-em-mqtt
+sudo chmod +x /opt/RPi-hh-em-mqtt/comparedisplay.py
 ```
 
 ### config this tool:
 ```
-sudo cp /opt/RPi-household-energy-status/config.json.example /opt/RPi-household-energy-status/config.json
-sudo nano /opt/RPi-household-energy-status/config.json
+sudo cp /opt/RPi-hh-em-mqtt/config.json.example /opt/RPi-hh-em-mqtt/config.json
+sudo nano /opt/RPi-hh-em-mqtt/config.json
 ```
 * add credentials from solar inverter
 * add ip adress from solar inverter an tasmota smartmeter
@@ -47,13 +47,13 @@ sudo crontab -e
 ```
 insert line:
 ```
-@reboot /opt/RPi-household-energy-status/comparedisplay.py --rotate 2 --config /opt/luma.examples/conf/st7735_128x128_WShat.conf
+@reboot /opt/RPi-hh-em-mqtt/em.py --rotate 2 --config /opt/luma.examples/conf/st7735_128x128_WShat.conf
 ```
 
 ## Update
 If you already use it, feel free to update with
 ```bash
-cd /opt/RPi-household-energy-status
+cd /opt/RPi-hh-em-mqtt
 sudo git pull origin main
 ```
 
