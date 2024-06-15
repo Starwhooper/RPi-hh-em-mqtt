@@ -1,0 +1,55 @@
+{
+  "pages":["detail","pretty"],
+  
+  "luma": {
+    "demo_opts.py": {
+      "folder": "/opt/luma.examples/examples"
+    }
+  },
+  "pagerotation": 10,
+  "calculationrefresh": 2,
+  "imageexport": {
+    "active": true,
+    "intervall": 60
+  },
+  "inverter": {
+    "address": "192.168.x.y",
+    "site": "status.html",
+    "user": "sad-min",
+    "pw": ".....",
+    "offset": -598
+  },
+  "mqtt":{
+	"broker":{
+		"user":"ttasmota",
+	    "pw":".....",
+		"url":".....",
+		"port":.....
+	},
+	"em":{
+		"subscribe": "tele/tasmota_...../SENSOR"
+	},
+	"plug":{
+		"1":{
+			"subscribe": "tele/tasmota_...../SENSOR"
+		},
+		"2":{
+			"subscribe": "tele/tasmota_...../SENSOR"
+		}
+	}
+  },	  
+  "electricitymeter": {
+    "since": 1710408600
+  },
+  "pushover": {
+    "messages": true,
+    "apikey": ".....",
+    "userkey": "....."
+  },
+  "font": {
+    "color": "WHITE",
+    "ttf": false,
+    "ttffile": "/opt/luma.examples/examples/fonts/miscfs_.ttf",
+    "ttfsize": 6
+  }
+}
