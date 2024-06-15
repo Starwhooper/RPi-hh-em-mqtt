@@ -38,7 +38,7 @@ except:
 
 logging.getLogger("urllib3")
 logging.basicConfig(
- filename='/var/log/householdenergy.log', 
+ filename='/var/log/hh-em.log', 
 # level=logging.DEBUG, encoding='utf-8', 
  level=logging.WARNING, encoding='utf-8', 
  format='%(asctime)s:%(levelname)s:%(message)s'
