@@ -90,6 +90,7 @@ electricitymeter_total_in = 0
 electricitymeter_total_out = 0
 plug = [0,0,0,0]
 
+
 def inverterurl():
  logging.debug('provide url: ' + 'http://' + cf['inverter']['user'] + ':' + quote(cf['inverter']['pw']) + '@' + cf['inverter']['address'] + '/' + cf['inverter']['site'])
  return('http://' + cf['inverter']['user'] + ':' + quote(cf['inverter']['pw']) + '@' + cf['inverter']['address'] + '/' + cf['inverter']['site'])
@@ -129,7 +130,7 @@ def doublecheck():
 def imagepath(page = ''):
  import tempfile
  folder = tempfile.gettempdir()
- filename = '/RPi-hh-em-mqtt'
+ filename = 'RPi-hh-em-mqtt'
  fileext = '.gif'
 
  if page == '': path = str(folder) + '/' + str(filename) + str(fileext)
@@ -138,7 +139,7 @@ def imagepath(page = ''):
  logging.debug('file exportpath: ' + str(path))
  return(path)
 
-def pomessage(msg = '', prio = 0, attachment = False):
+def pomessage(msg = '', prio = 0, attachment = ''):
  try: 
   cf['pushover']['messages']
   if cf['pushover']['messages'] == True: pushovermessages = True
@@ -149,17 +150,27 @@ def pomessage(msg = '', prio = 0, attachment = False):
   
  if pushovermessages == True:
   logging.debug('will send message')
-  if msg != "":
-   logging.debug('found message text')
-   if attachment == True:
-    #if Path(open(str(imagepath()).is_file())) == True:
-    if os.path.isfile(imagepath(page = 'detail')) == True:
-     attachment = False
-     logging.warning('Attachment ' + imagepath(page = 'detail') + ' requested, but not found')
-    logging.warning('Attachment ' + imagepath(page = 'detail') + ' requested and found')
-   logging.debug('will send po message')
-   if attachment == True:
+  if msg == '':
+   logging.warning('no message text found, set ...')
+   msg = '...'
+  
+  if attachment == '':
+   logging.info('will send po message without attachment')
+   r = requests.post(
+    "https://api.pushover.net/1/messages.json", data = {
+     "token": cf["pushover"]["apikey"],
+     "user": cf["pushover"]["userkey"],
+     "html": 1,
+     "priority": prio,
+     "message": "Status of hh-em:" + msg ,
+     "title": "hh-em",
+    }
+   )
+  else:
+   if os.path.isfile(attachment) == True:
+    logging.info('Attachment ' + attachment + ' requested and found')
     time.sleep(1)
+    logging.debug('will send po message with attachment')
     r = requests.post(
      "https://api.pushover.net/1/messages.json", data = {
       "token": cf["pushover"]["apikey"],
@@ -171,10 +182,13 @@ def pomessage(msg = '', prio = 0, attachment = False):
      }
      ,
      files = {
-      "attachment": ("status.gif", open(str(imagept()), "rb"), "image/gif")
+      #"attachment": ("status.gif", open(str(imagept()), "rb"), "image/gif")
+      "attachment": ("status.gif", open(str(attachment), "rb"), "image/gif")
      }
     )
    else:
+    logging.warning('Attachment ' + attachment + ' requested but not found')
+    logging.debug('will send po message without attachment')
     r = requests.post(
      "https://api.pushover.net/1/messages.json", data = {
       "token": cf["pushover"]["apikey"],
@@ -185,8 +199,7 @@ def pomessage(msg = '', prio = 0, attachment = False):
       "title": "hh-em",
      }
     )
-  else: logging.debug('no messagetext found')
-
+   
 def is_json(myjson):
   try:
     json.loads(myjson)
@@ -197,6 +210,8 @@ def is_json(myjson):
 def on_mqtt_message(client, userdata, msg):
  if is_json(msg.payload) == True: payload = json.loads(str(msg.payload.decode("utf-8")))
  else: payload = msg.payload.decode("utf-8")
+ 
+ logging.info('mqtt topic: ' + msg.topic)
  
  if msg.topic == cf['mqtt']['em']['subscribe']:
   global electricitymeter_total_in
@@ -212,9 +227,7 @@ def on_mqtt_message(client, userdata, msg):
     global plug
     plug[int(i)] = payload['ENERGY']['Power']
     break
-  
  
-
 #######################################################
 #
 # read and calculate
@@ -273,7 +286,7 @@ def calculate():
  logging.debug('start calculation')
  
  if lastcalculate == datetime(1970,1,1):
-  pomessage(msg='in reason of none previous calculation, the system seams to be restarted',prio=1,attachment=False)
+  pomessage(msg='in reason of none previous calculation, the system seams to be restarted',prio=1,attachment='')
 
  global lastnegativepowerusagemessage
  try: lastnegativepowerusagemessage
@@ -306,7 +319,8 @@ def calculate():
 
  global electricitymeter_now
  if electricitymeter_now < -50 and (lastnegativepowerusagemessage <= datetime.now() - timedelta(minutes=15)):
-  pomessage(msg='electricitymeter now: ' + str(electricitymeter_now),prio=0,attachment=True)
+  saveimage(exportpathfile = imagepath(page = 'detail'), force = True)  
+  pomessage(msg='electricitymeter now: ' + str(electricitymeter_now),prio=0,attachment=imagepath(page = 'detail'))
   lastnegativepowerusagemessage = datetime.now()
 
  try:
@@ -526,8 +540,10 @@ def output(device):
  except:
   loggin.error('show image on display not possible')
 
-def saveimage():
- exportpathfile = imagepath(page = imagestyle)
+#def saveimage():
+# exportpathfile = imagepath(page = imagestyle)
+
+def saveimage(exportpathfile = imagepath(page = 'pretty'), force=False):
  
  try:
   lastimageexport = os.path.getmtime(exportpathfile)
@@ -536,8 +552,8 @@ def saveimage():
   lastimageexport = datetime(1970, 1, 1).timestamp()
   logging.debug('no previous image ' + exportpathfile + ' found')
  
- if lastimageexport <= datetime.now().timestamp() - cf['imageexport']['intervall']:
-  logging.info('current image to old, would create new one')
+ if lastimageexport <= datetime.now().timestamp() - cf['imageexport']['intervall'] or force == True:
+  logging.info('create new image, in reason of age or force')
   if cf['imageexport']['active'] == True:
    try:
     outputimage.save(exportpathfile)
@@ -546,7 +562,9 @@ def saveimage():
    except:
     logging.warning('image could not saved to ' + exportpathfile)
   else:
-   logging.info('current image is from now')
+   logging.info('image export is not enabled')
+ else:
+  logging.info('current image is from now')
   
 
 def on_disconnect(client, userdata, rc):
