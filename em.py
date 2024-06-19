@@ -627,7 +627,8 @@ def main():
  except:
   logging.critical('could not start to subscribe from  mqtt')
 
-  
+ client.on_disconnect = on_disconnect
+ 
  client.loop_start()
  
  while True:
@@ -648,7 +649,7 @@ def main():
   except:
    logging.critical('issue with saveimage')
 
-  time.sleep(0.1)
+  time.sleep(cf['displayrefresh'])
  client.loop_stop()
 if __name__ == '__main__':
  try:
