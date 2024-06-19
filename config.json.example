@@ -6,8 +6,9 @@
       "folder": "/opt/luma.examples/examples"
     }
   },
-  "pagerotation": 10,
-  "calculationrefresh": 2,
+  "pagerotation": 30,
+  "calculationrefresh": 5,
+  "displayrefresh": 2,
   "imageexport": {
     "active": true,
     "intervall": 60
