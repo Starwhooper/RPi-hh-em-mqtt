@@ -33,13 +33,17 @@ try:
  import paho.mqtt.client as paho
  from paho import mqtt 
  
+ from functions import pomessage
+ from functions import is_json
+ from functions import colorbar
+ 
 except:
  sys.exit("\033[91m {}\033[00m" .format('any needed package is not aviable. Please check README.md to check which components should be installed via pip3".'))
 
 logging.getLogger("urllib3")
 logging.basicConfig(
  filename='/var/log/hh-em.log', 
- level=logging.DEBUG, encoding='utf-8', 
+ level=logging.INFO, encoding='utf-8', 
 # level=logging.WARNING, encoding='utf-8', 
  format='%(asctime)s:%(levelname)s:%(message)s'
 )
@@ -92,12 +96,10 @@ plug = [0,0,0,0]
 
 
 def inverterurl():
- logging.debug('provide url: ' + 'http://' + cf['inverter']['user'] + ':' + quote(cf['inverter']['pw']) + '@' + cf['inverter']['address'] + '/' + cf['inverter']['site'])
- return('http://' + cf['inverter']['user'] + ':' + quote(cf['inverter']['pw']) + '@' + cf['inverter']['address'] + '/' + cf['inverter']['site'])
+ url = 'http://' + cf['inverter']['user'] + ':' + quote(cf['inverter']['pw']) + '@' + cf['inverter']['address'] + '/' + cf['inverter']['site']
+ logging.debug('provide url: ' + url)
+ return(url)
 
-#def electricitymeterurl():
-# logging.debug('provide url: ' + 'http://' + cf['electricitymeter']['address'] + '/' + cf['electricitymeter']['site'])
-# return('http://' + cf['electricitymeter']['address'] + '/' + cf['electricitymeter']['site'])
 
 def prepare():
  #####global vars with const value
@@ -113,20 +115,6 @@ def prepare():
  globals()['font'] = font
 
  
-def doublecheck():
- runninginstances = 0
- for p in psutil.process_iter():
-  if re.search(os.path.abspath(__file__), str(p.cmdline())):
-   if re.search("name='sudo'", str(p)):
-    pass
-   else:
-    logging.warning('double start ' + str(runninginstances) + ': ' + str(p))
-    runninginstances = runninginstances + 1
- if runninginstances >= 2:
-  logging.warning('is already running')
-  sys.exit("\033[91m {}\033[00m" .format('exit: is already running'))
- logging.debug('check no multiply starts')
-
 def imagepath(page = ''):
  import tempfile
  folder = tempfile.gettempdir()
@@ -139,74 +127,6 @@ def imagepath(page = ''):
  logging.debug('file exportpath: ' + str(path))
  return(path)
 
-def pomessage(msg = '', prio = 0, attachment = ''):
- try: 
-  cf['pushover']['messages']
-  if cf['pushover']['messages'] == True: pushovermessages = True
-  pushovermessages = True
- except: 
-  pushovermessages = False
-  logger.warning('send message is not enabled in config.json')
-  
- if pushovermessages == True:
-  logging.debug('will send message')
-  if msg == '':
-   logging.warning('no message text found, set ...')
-   msg = '...'
-  
-  if attachment == '':
-   logging.info('will send po message without attachment')
-   r = requests.post(
-    "https://api.pushover.net/1/messages.json", data = {
-     "token": cf["pushover"]["apikey"],
-     "user": cf["pushover"]["userkey"],
-     "html": 1,
-     "priority": prio,
-     "message": "Status of hh-em:" + msg ,
-     "title": "hh-em",
-    }
-   )
-  else:
-   if os.path.isfile(attachment) == True:
-    logging.info('Attachment ' + attachment + ' requested and found')
-    time.sleep(1)
-    logging.debug('will send po message with attachment')
-    r = requests.post(
-     "https://api.pushover.net/1/messages.json", data = {
-      "token": cf["pushover"]["apikey"],
-      "user": cf["pushover"]["userkey"],
-      "html": 1,
-      "priority": prio,
-      "message": "Status of hh-em:" + msg ,
-      "title": "hh-em",
-     }
-     ,
-     files = {
-      #"attachment": ("status.gif", open(str(imagept()), "rb"), "image/gif")
-      "attachment": ("status.gif", open(str(attachment), "rb"), "image/gif")
-     }
-    )
-   else:
-    logging.warning('Attachment ' + attachment + ' requested but not found')
-    logging.debug('will send po message without attachment')
-    r = requests.post(
-     "https://api.pushover.net/1/messages.json", data = {
-      "token": cf["pushover"]["apikey"],
-      "user": cf["pushover"]["userkey"],
-      "html": 1,
-      "priority": prio,
-      "message": "Status of hh-em:" + msg ,
-      "title": "hh-em",
-     }
-    )
-   
-def is_json(myjson):
-  try:
-    json.loads(myjson)
-  except ValueError as e:
-    return False
-  return True
-  
 def on_mqtt_message(client, userdata, msg):
  if is_json(msg.payload) == True: payload = json.loads(str(msg.payload.decode("utf-8")))
  else: payload = msg.payload.decode("utf-8")
@@ -286,7 +206,8 @@ def calculate():
  logging.debug('start calculation')
  
  if lastcalculate == datetime(1970,1,1):
-  pomessage(msg='in reason of none previous calculation, the system seams to be restarted',prio=1,attachment='')
+  if cf['pushover']['messages'] == True: pomessage(msg='in reason of none previous calculation, the system seams to be restarted', prio=1, attachment='', apikey=cf["pushover"]["apikey"], userkey = cf["pushover"]["userkey"], logging = logging)
+  else: logger.warning('send message is not enabled in config.json')
 
  global lastnegativepowerusagemessage
  try: lastnegativepowerusagemessage
@@ -320,7 +241,8 @@ def calculate():
  global electricitymeter_now
  if electricitymeter_now < -50 and (lastnegativepowerusagemessage <= datetime.now() - timedelta(minutes=15)):
   saveimage(exportpathfile = imagepath(page = 'detail'), force = True)  
-  pomessage(msg='electricitymeter now: ' + str(electricitymeter_now),prio=0,attachment=imagepath(page = 'detail'))
+  if cf['pushover']['messages'] == True: pomessage(msg='electricitymeter now: ' + str(electricitymeter_now), attachment=imagepath(page = 'detail'), apikey=cf["pushover"]["apikey"], userkey = cf["pushover"]["userkey"], logging = logging)
+  else: logger.warning('send message is not enabled in config.json')
   lastnegativepowerusagemessage = datetime.now()
 
  try:
@@ -381,13 +303,6 @@ def calculate():
 #
 #######################################################
 
-def colorbar(rate):
- if rate > 80: color = 'green'
- elif rate > 70: color = 'yellowgreen'
- elif rate > 60: color = 'yellow'
- elif rate > 40: color = 'orange'
- else: color = 'red'
- return(color)
 
 def pagetoshow(operation = ""):
  #pages = ['detail','pretty'] #,'blank']
@@ -595,7 +510,6 @@ def on_disconnect(client, userdata, rc):
  
 def main():
  logging.debug('start main')
-# doublecheck() #ensure that only one instance is running at the same time
  prepare()
  device = get_device()
 
@@ -625,17 +539,17 @@ def main():
    client.subscribe(cf['mqtt']['plug'][i]['subscribe']) #plug
   client.on_message = on_mqtt_message
  except:
-  logging.critical('could not start to subscribe from  mqtt')
+  logging.critical('could not start to subscribe from mqtt')
 
  client.on_disconnect = on_disconnect
  
  client.loop_start()
  
  while True:
-  try:
-   calculate()
-  except:
-   logging.warning('issue with calculate')
+#  try:
+  calculate()
+ # except:
+ #  logging.warning('issue with calculate')
   try:
    createimage(device.width,device.height)
   except:
@@ -651,6 +565,7 @@ def main():
 
   time.sleep(cf['displayrefresh'])
  client.loop_stop()
+
 if __name__ == '__main__':
  try:
   logging.debug('pass name')
